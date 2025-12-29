@@ -7,9 +7,15 @@ from unstructured.partition.auto import partition
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
+# Lazy-loaded embeddings to allow app to start quickly
+_embeddings = None
 
-
-embeddings=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+def get_embeddings():
+    global _embeddings
+    if _embeddings is None:
+        print("Loading embedding model...")
+        _embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    return _embeddings
 
 VECTORSTORE_PATH=Path("vectorstore")
 
@@ -52,7 +58,7 @@ def create_and_store_vectorstore()->None:
     if not raw_docs:
         return 
     chunks=chunk_documents(raw_docs)
-    vectorstore=FAISS.from_documents(chunks,embeddings)
+    vectorstore=FAISS.from_documents(chunks,get_embeddings())
     VECTORSTORE_PATH.mkdir(parents=True,exist_ok=True)
     vectorstore.save_local(str(VECTORSTORE_PATH))
     print(f"Vectorstore created and saved  in '{VECTORSTORE_PATH}'")
@@ -64,13 +70,13 @@ def get_retriever():
         print("Loading existing vectorstore")
         vectorstore=FAISS.load_local(
             str(VECTORSTORE_PATH),
-            embeddings,
+            get_embeddings(),
             allow_dangerous_deserialization=True
         )
     else:
         print("First run detected,build vectorestore")
         create_and_store_vectorstore()
-        vectorstore=FAISS.load_local(str(VECTORSTORE_PATH),embeddings,allow_dangerous_deserialization=True)
+        vectorstore=FAISS.load_local(str(VECTORSTORE_PATH),get_embeddings(),allow_dangerous_deserialization=True)
 
     return vectorstore.as_retriever(search_kwargs={"k":10})
 

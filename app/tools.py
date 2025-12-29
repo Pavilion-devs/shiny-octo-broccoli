@@ -1,10 +1,28 @@
 import requests
 from app.utils import get_retriever
-import os 
+import os
 from dotenv import load_dotenv
 load_dotenv()
 
-retriever=get_retriever()
+# Lazy-loaded retriever to allow app to start quickly
+_retriever = None
+
+def get_lazy_retriever():
+    global _retriever
+    if _retriever is None:
+        print("Initializing retriever (first request)...")
+        _retriever = get_retriever()
+    return _retriever
+
+class LazyRetriever:
+    """Proxy class that delays retriever initialization until first use"""
+    def invoke(self, *args, **kwargs):
+        return get_lazy_retriever().invoke(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(get_lazy_retriever(), name)
+
+retriever = LazyRetriever()
 
 def brave_search_results(query:str,count:int=5):
     """Direct Brave search API call"""
