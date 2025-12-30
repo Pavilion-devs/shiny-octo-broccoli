@@ -25,12 +25,8 @@ transformers>=4.41.0
 # Vector Database
 faiss-cpu==1.13.1
 
-# Document Processing
-unstructured==0.18.21
-unstructured-client==0.42.4
-unstructured_inference==0.7.36
-unstructured.pytesseract==0.3.15
-pillow-heif
+# Document Processing (lightweight)
+pypdf>=4.0.0
 
 # Web Scraping & Parsing
 beautifulsoup4==4.14.3

@@ -44,10 +44,63 @@ def get_embeddings():
     return _embeddings
 
 
+def _extract_text_from_pdf(file_path: Path) -> str:
+    """Extract text from PDF using pypdf (lightweight, no system deps)"""
+    from pypdf import PdfReader
+    try:
+        reader = PdfReader(str(file_path))
+        text_parts = []
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_parts.append(page_text)
+        return "\n\n".join(text_parts)
+    except Exception as e:
+        print(f"Error reading PDF {file_path.name}: {e}")
+        return ""
+
+
+def _extract_text_from_file(file_path: Path) -> str:
+    """Extract text from various file types"""
+    suffix = file_path.suffix.lower()
+
+    if suffix == ".pdf":
+        return _extract_text_from_pdf(file_path)
+
+    elif suffix in {".txt", ".md", ".html", ".htm"}:
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            # Basic HTML tag stripping for HTML files
+            if suffix in {".html", ".htm"}:
+                import re
+                content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
+                content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
+                content = re.sub(r'<[^>]+>', ' ', content)
+                content = re.sub(r'\s+', ' ', content)
+            return content.strip()
+        except Exception as e:
+            print(f"Error reading {file_path.name}: {e}")
+            return ""
+
+    elif suffix == ".docx":
+        try:
+            # Try to use python-docx if available
+            from docx import Document as DocxDocument
+            doc = DocxDocument(str(file_path))
+            return "\n\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+        except ImportError:
+            print(f"python-docx not installed, skipping {file_path.name}")
+            return ""
+        except Exception as e:
+            print(f"Error reading DOCX {file_path.name}: {e}")
+            return ""
+
+    return ""
+
+
 def load_all_documents(folder: str = "data") -> List:
-    """Loads every PDF,DOCX,TXT,HTML from data folder using unstructured"""
-    # Import unstructured ONLY when this function is called
-    from unstructured.partition.auto import partition
+    """Loads PDF, DOCX, TXT, HTML files from data folder using lightweight parsers"""
     Document = _get_document_class()
 
     docs = []
@@ -55,11 +108,13 @@ def load_all_documents(folder: str = "data") -> List:
     if not folder_path.exists():
         print("No 'data' folder found, create it and drop your files there")
         return docs
+
+    supported_extensions = {".pdf", ".docx", ".txt", ".html", ".htm", ".md"}
+
     for file_path in folder_path.rglob("*.*"):
-        if file_path.suffix.lower() in {".pdf", ".docx", ".txt", ".html", ".htm", ".md"}:
+        if file_path.suffix.lower() in supported_extensions:
             print(f"Loading ---> {file_path.name}")
-            elements = partition(filename=str(file_path))
-            text = "\n\n".join([el.text for el in elements if getattr(el, "text", None)])
+            text = _extract_text_from_file(file_path)
             if text.strip():
                 docs.append(
                     Document(
@@ -67,6 +122,7 @@ def load_all_documents(folder: str = "data") -> List:
                         metadata={"source": file_path.name}
                     )
                 )
+
     print(f"Loaded {len(docs)} documents")
     return docs
 
